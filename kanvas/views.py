@@ -26,7 +26,11 @@ class UserView(APIView):
             )
 
         try:
-            user = User(username=serialized.validated_data["username"])
+            user = User(
+                username=serialized.validated_data["username"],
+                is_staff=serialized.validated_data["is_staff"],
+                is_superuser=serialized.validated_data["is_superuser"],
+            )
 
             password = serialized.validated_data["password"]
 
