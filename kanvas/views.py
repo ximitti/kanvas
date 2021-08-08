@@ -9,18 +9,20 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
-from .models import Course
+from .models import Course, Activity, Submission
 
 from .serializers import (
     UserSerializer,
     LoginSerializer,
     CourseSerializer,
     RegistrationSerializer,
+    ActivitySerializer,
+    SubmissionSerializer,
 )
 
-from .permissions import IsInstructor
+from .permissions import IsInstructor, IsFacilitador
 
 # ----------------------------------
 
@@ -82,7 +84,7 @@ class LoginView(APIView):
 class CourseView(APIView):
 
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsInstructor | IsAuthenticatedOrReadOnly]
 
     def post(self, request):
 
@@ -99,10 +101,18 @@ class CourseView(APIView):
 
         return Response(serialized.data, status=status.HTTP_201_CREATED)
 
+    def get(self, request):
 
-class CourseRegistrationView(APIView):
+        courses = Course.objects.all()
+
+        serialized = CourseSerializer(courses, many=True)
+
+        return Response(serialized.data, status=status.HTTP_200_OK)
+
+
+class CourseDetailView(APIView):
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated, IsInstructor]
+    permission_classes = [IsInstructor | IsAuthenticatedOrReadOnly]
 
     def put(self, request, course_id=""):
         course = get_object_or_404(Course, id=course_id)
@@ -130,5 +140,46 @@ class CourseRegistrationView(APIView):
         course.users.set(register_list)
 
         serialized = CourseSerializer(course)
+
+        return Response(serialized.data, status=status.HTTP_200_OK)
+
+    def delete(self, request, course_id=""):
+        course = get_object_or_404(Course, id=course_id)
+
+        course.delete()
+
+        return Response("", status=status.HTTP_204_NO_CONTENT)
+
+    def get(self, request, course_id=""):
+        course = get_object_or_404(Course, id=course_id)
+
+        serialized = CourseSerializer(course)
+
+        return Response(serialized.data, status=status.HTTP_200_OK)
+
+
+class ActivityView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsInstructor | IsFacilitador]
+
+    def post(self, request):
+
+        serialized = ActivitySerializer(data=request.data)
+
+        if not serialized.is_valid():
+            return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        activity_data = serialized.validated_data
+        activity = Activity.objects.get_or_create(**activity_data)[0]
+
+        serialized = ActivitySerializer(activity)
+
+        return Response(serialized.data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+
+        activities = Activity.objects.all()
+
+        serialized = ActivitySerializer(activities, many=True)
 
         return Response(serialized.data, status=status.HTTP_200_OK)
