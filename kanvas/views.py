@@ -3,13 +3,13 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
+from django.db.models import ObjectDoesNotExist
 
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 from .models import Course, Activity, Submission
 
@@ -20,9 +20,10 @@ from .serializers import (
     RegistrationSerializer,
     ActivitySerializer,
     SubmissionSerializer,
+    SubmissionGradeSerializer,
 )
 
-from .permissions import IsInstructor, IsFacilitador
+from .permissions import IsInstructor, IsFacilitador, IsStudent, IsInstructorAndReadOnly
 
 # ----------------------------------
 
@@ -84,7 +85,7 @@ class LoginView(APIView):
 class CourseView(APIView):
 
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsInstructor | IsAuthenticatedOrReadOnly]
+    permission_classes = [IsInstructorAndReadOnly]
 
     def post(self, request):
 
@@ -112,50 +113,75 @@ class CourseView(APIView):
 
 class CourseDetailView(APIView):
     authentication_classes = [TokenAuthentication]
-    permission_classes = [IsInstructor | IsAuthenticatedOrReadOnly]
+    permission_classes = [IsInstructorAndReadOnly]
 
     def put(self, request, course_id=""):
-        course = get_object_or_404(Course, id=course_id)
+        try:
+            course = Course.objects.get(id=course_id)
 
-        serialized = RegistrationSerializer(data=request.data)
+            serialized = RegistrationSerializer(data=request.data)
 
-        if not serialized.is_valid():
-            return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
+            if not serialized.is_valid():
+                return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        users = request.data.pop("user_ids")
+            users = request.data.pop("user_ids")
 
-        register_list = []
+            register_list = []
 
-        for user_id in users:
-            user = get_object_or_404(User, id=user_id)
+            for user_id in users:
+                try:
+                    user = User.objects.get(id=user_id)
 
-            if user.is_superuser == True or user.is_staff == True:
-                return Response(
-                    {"errors": "Only students can be enrolled in the course."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                    if user.is_superuser == True or user.is_staff == True:
+                        return Response(
+                            {"errors": "Only students can be enrolled in the course."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
 
-            register_list.append(user)
+                    register_list.append(user)
 
-        course.users.set(register_list)
+                except ObjectDoesNotExist as _:
+                    return Response(
+                        {"errors": "invalid user_id list"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
 
-        serialized = CourseSerializer(course)
+            course.users.set(register_list)
 
-        return Response(serialized.data, status=status.HTTP_200_OK)
+            serialized = CourseSerializer(course)
+
+            return Response(serialized.data, status=status.HTTP_200_OK)
+
+        except ObjectDoesNotExist as _:
+            return Response(
+                {"errors": "invalid course_id"}, status=status.HTTP_404_NOT_FOUND
+            )
 
     def delete(self, request, course_id=""):
-        course = get_object_or_404(Course, id=course_id)
+        try:
+            course = Course.objects.get(id=course_id)
 
-        course.delete()
+            course.delete()
 
-        return Response("", status=status.HTTP_204_NO_CONTENT)
+            return Response("", status=status.HTTP_204_NO_CONTENT)
+
+        except ObjectDoesNotExist as _:
+            return Response(
+                {"errors": "invalid course_id"}, status=status.HTTP_404_NOT_FOUND
+            )
 
     def get(self, request, course_id=""):
-        course = get_object_or_404(Course, id=course_id)
+        try:
+            course = Course.objects.get(id=course_id)
 
-        serialized = CourseSerializer(course)
+            serialized = CourseSerializer(course)
 
-        return Response(serialized.data, status=status.HTTP_200_OK)
+            return Response(serialized.data, status=status.HTTP_200_OK)
+
+        except ObjectDoesNotExist as _:
+            return Response(
+                {"errors": "invalid course_id"}, status=status.HTTP_404_NOT_FOUND
+            )
 
 
 class ActivityView(APIView):
@@ -163,14 +189,22 @@ class ActivityView(APIView):
     permission_classes = [IsInstructor | IsFacilitador]
 
     def post(self, request):
-
         serialized = ActivitySerializer(data=request.data)
 
         if not serialized.is_valid():
             return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
 
         activity_data = serialized.validated_data
-        activity = Activity.objects.get_or_create(**activity_data)[0]
+
+        activity = Activity.objects.filter(title=activity_data["title"]).first()
+        print(activity)
+
+        if activity:
+            activity.points = activity_data["points"]
+            activity.save()
+
+        else:
+            activity = Activity.objects.create(**activity_data)
 
         serialized = ActivitySerializer(activity)
 
@@ -181,5 +215,70 @@ class ActivityView(APIView):
         activities = Activity.objects.all()
 
         serialized = ActivitySerializer(activities, many=True)
+
+        return Response(serialized.data, status=status.HTTP_200_OK)
+
+
+class ActivityDetailView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsStudent]
+
+    def post(self, request, activity_id=""):
+        activity = get_object_or_404(Activity, id=activity_id)
+        user = User.objects.get(id=request.user.id)
+
+        serialized = SubmissionSerializer(data=request.data)
+        if not serialized.is_valid():
+            return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        submission_data = serialized.validated_data
+        submission = Submission.objects.create(
+            repo=submission_data["repo"], user=user, activity=activity
+        )
+
+        serialized = SubmissionSerializer(submission)
+
+        return Response(serialized.data, status=status.HTTP_201_CREATED)
+
+
+class SubmissionView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsInstructor | IsFacilitador | IsStudent]
+
+    def get(self, request):
+        user = User.objects.get(id=request.user.id)
+
+        if not user.is_staff and not user.is_superuser:
+            print("student")
+            submissions = Submission.objects.filter(user_id=user.id)
+
+            serialized = SubmissionSerializer(submissions, many=True)
+            return Response(serialized.data, status=status.HTTP_200_OK)
+
+        submissions = Submission.objects.all()
+
+        serialized = SubmissionSerializer(submissions, many=True)
+
+        return Response(serialized.data, status=status.HTTP_200_OK)
+
+
+class SubmissionDetailView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsInstructor | IsFacilitador]
+
+    def put(self, request, submission_id=""):
+        submission = get_object_or_404(Submission, id=submission_id)
+
+        serialized = SubmissionGradeSerializer(data=request.data)
+        if not serialized.is_valid():
+            return Response(serialized.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        submission_data = serialized.validated_data
+
+        submission.grade = submission_data["grade"]
+
+        submission.save()
+
+        serialized = SubmissionSerializer(submission)
 
         return Response(serialized.data, status=status.HTTP_200_OK)
