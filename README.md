@@ -11,24 +11,26 @@ git clone https://gitlab.com/ximitti/kanvas.git
 Depois que terminar de baixar, é necessário entrar na pasta, criar um ambiente virtual e entrar nele:
 
 ## Entrar na pasta
-	cd kanvas
+``` sh
+cd kanvas
+```
 
 ## Criar um ambiente virtual
 
 ``` sh
-    python3 -m venv venv
+python3 -m venv venv
 
 # Entrar no ambiente virtual:
-    source venv/bin/activate
+source venv/bin/activate
 
 # Então, para instalar as dependências, basta:
-    pip install -r requirements.txt
+pip install -r requirements.txt
 
 # Depois de ter instalado as dependências, é necessário rodar as migrations para que o banco de dados e as tabelas sejam criadas:
-    ./manage.py migrate
+./manage.py migrate
     
 # Então, para rodar, basta digitar o seguinte, no terminal:
-    ./manage.py runserver
+./manage.py runserver
 ```
 E o sistema estará rodando em http://127.0.0.1:8000/
 
@@ -36,11 +38,13 @@ E o sistema estará rodando em http://127.0.0.1:8000/
 Para utilizar este sistema, é necessário utilizar um API Client, como o Insomnia
 
 **Rotas**
+
 **POST /api/accounts/**
 
 Esta rota permite a criação dos usuários do sistema
 
 Body:
+
 ``` json
 // REQUEST
     {
@@ -52,6 +56,7 @@ Body:
 ```
 
 Response:
+
 ``` json
 // RESPONSE STATUS -> HTTP 201
     {
@@ -62,10 +67,10 @@ Response:
     }
 ```
 
-Caso haja a tentativa de criação de um usuário que já está cadastrado o sistema deverá responder com HTTP 409 - Conflict.
 
 **POST /api/login/**
-fazendo login (serve para qualquer tipo de usuário)
+
+Rota de login (serve para qualquer tipo de usuário)
 
 Body:
 
@@ -88,9 +93,9 @@ Response:
     
 Esse token servirá para identificar o usuário em cada request. Na grande maioria dos endpoints seguintes, será necessário colocar essa informação nos Headers. O header específico para autenticação tem o formato Authorization: Token <colocar o token aqui>.
 
-Caso haja a tentativa de login de uma conta que ainda não tenha sido criada, o sistema deverá retornar HTTP 401 - Unauthorized.
 
 **POST /api/courses/**
+
 Rota para criação de um curso
     
 Body:
@@ -115,7 +120,8 @@ Response:
     }
 ```
     
-**PUT /api/courses/**<int:course_id>**/registrations/**
+**PUT /api/courses/\<int:course_id\>/registrations/**
+
 Rota para atualizar a lista de estudantes matriculados em um curso
 
 Body:
@@ -151,6 +157,7 @@ Response:
 ```
     
 **GET /api/courses/**
+
 Rota para obter a lista de cursos e alunos
 
 Response:
@@ -180,7 +187,8 @@ Response:
     ]
 ```
 
-**GET /api/courses/**<int:course_id>**/**
+**GET /api/courses/\<int:course_id\>/**
+
 Rota para filtrar por id de curso
 
 Response:
@@ -199,7 +207,8 @@ Response:
     }
 ```
 
-**DELETE /api/courses/**<int:course_id>**/**
+**DELETE /api/courses/\<int:course_id\>/**
+
 Rota para deletar curso por id
 
 ``` json
@@ -210,6 +219,7 @@ Rota para deletar curso por id
 ```
 
 **POST /api/activities/**
+
 Rota para criar atividades
 
 Body:
@@ -237,6 +247,7 @@ Response:
 ```
 
 **GET /api/activities/**
+
 Rota para listar atividades
 
 Request:
@@ -296,7 +307,8 @@ Response:
     ]
 ```
 
-**POST /api/activities/**<int:activity_id>**/submissions/**
+**POST /api/activities/\<int:activity_id\>/submissions/**
+
 Rota para cadastrar submissões de atividades, somente estudantes podem fazer submissões
 
 Body:
@@ -323,7 +335,8 @@ Response:
     }
 ```
 
-**PUT /api/submissions/**<int:submission_id>**/**
+**PUT /api/submissions/\<int:submission_id\>/**
+
 Rota para atualizar nota de submissão, somente instrutores e facilitadores tem permissão
 
 Body:
@@ -350,6 +363,7 @@ Response:
 ```
 
 **GET /api/submissions/**
+
 Rota para listar submissões, caso a autenticação seja de um aluno serão mostrados somente deste aluno, caso contrário serão listados todas as submissões
 
 ``` json
@@ -411,7 +425,6 @@ Rota para listar submissões, caso a autenticação seja de um aluno serão most
     }
     ]
 ```
-
 
 
 ## Tecnologias utilizadas 📱
